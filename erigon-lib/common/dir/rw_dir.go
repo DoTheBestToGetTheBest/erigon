@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ledgerwatch/log/v3"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -49,7 +50,8 @@ func FileExist(path string) bool {
 		if os.IsNotExist(err) {
 			return false
 		}
-		panic(err)
+		//panic(err)
+		log.Warn("FileExist", "path", path, "err", err)
 		return false
 	}
 	if !fi.Mode().IsRegular() {
