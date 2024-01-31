@@ -16,7 +16,7 @@ require (
 	github.com/99designs/gqlgen v0.17.40
 	github.com/Giulio2002/bls v0.0.0-20230906201036-c2330c97dc7d
 	github.com/Masterminds/sprig/v3 v3.2.3
-	github.com/RoaringBitmap/roaring v1.7.0
+	github.com/RoaringBitmap/roaring v1.9.0
 	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/alecthomas/kong v0.8.1
 	github.com/anacrolix/log v0.14.3-0.20230823030427-4b296d71a6b4
@@ -91,7 +91,7 @@ require (
 	github.com/xsleonard/go-merkle v1.1.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.18.0
-	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
+	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
 	golang.org/x/net v0.20.0
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.16.0

@@ -11,7 +11,7 @@ require (
 )
 
 require (
-	github.com/RoaringBitmap/roaring v1.7.0
+	github.com/RoaringBitmap/roaring v1.9.0
 	github.com/anacrolix/dht/v2 v2.20.0
 	github.com/anacrolix/go-libutp v1.3.1
 	github.com/anacrolix/log v0.14.3-0.20230823030427-4b296d71a6b4
@@ -43,7 +43,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/tidwall/btree v1.6.0
 	golang.org/x/crypto v0.18.0
-	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
+	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
 	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.16.0
 	golang.org/x/time v0.5.0
