@@ -135,7 +135,7 @@ func (rw *TraceWorker2) RunTxTask(txTask *state.TxTask) {
 				panic(err)
 			}
 			// For Genesis, rules should be empty, so that empty accounts can be included
-			rules = &chain.Rules{}
+			rules = &chain.Rules{} //nolint
 			break
 		}
 
