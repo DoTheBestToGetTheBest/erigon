@@ -700,18 +700,7 @@ func (ac *AggregatorV3Context) maxTxNumInDomainFiles(cold bool) uint64 {
 func (ac *AggregatorV3Context) CanPrune(tx kv.Tx) bool {
 	return ac.somethingToPrune(tx)
 }
-func (ac *AggregatorV3Context) CanPruneFrom(tx kv.Tx) uint64 {
-	fst, _ := kv.FirstKey(tx, ac.a.tracesTo.indexKeysTable)
-	fst2, _ := kv.FirstKey(tx, ac.a.d[kv.StorageDomain].History.indexKeysTable)
-	fst3, _ := kv.FirstKey(tx, ac.a.d[kv.CommitmentDomain].History.indexKeysTable)
-	if len(fst) > 0 && len(fst2) > 0 && len(fst3) > 0 {
-		fstInDb := binary.BigEndian.Uint64(fst)
-		fstInDb2 := binary.BigEndian.Uint64(fst2)
-		fstInDb3 := binary.BigEndian.Uint64(fst3)
-		return cmp.Min(cmp.Min(fstInDb, fstInDb2), fstInDb3)
-	}
-	return math2.MaxUint64
-}
+
 func (ac *AggregatorV3Context) CanUnwindDomainsToBlockNum(tx kv.Tx) (uint64, error) {
 	_, histBlockNumProgress, err := rawdbv3.TxNums.FindBlockNum(tx, ac.CanUnwindDomainsToTxNum())
 	return histBlockNumProgress, err
@@ -748,8 +737,8 @@ func (ac *AggregatorV3Context) somethingToPrune(tx kv.Tx) bool {
 		return false
 	}
 	for _, d := range ac.d {
-		if !d.CanPruneUntil(tx) {
-			return false
+		if d.CanPruneUntil(tx) {
+			return true
 		}
 	}
 	return ac.logAddrs.CanPrune(tx) ||
@@ -882,10 +871,18 @@ func (ac *AggregatorV3Context) Prune(ctx context.Context, tx kv.RwTx, limit uint
 		step = (txTo - 1) / ac.a.StepSize()
 	}
 
-	ac.a.logger.Info("aggregator prune", "step", step,
-		"range", fmt.Sprintf("[%d,%d)", txFrom, txTo), /*"limit", limit,
-		"stepsLimit", limit/ac.a.aggregationStep,*/"stepsRangeInDB", ac.a.StepsRangeInDBAsStr(tx))
+	if !ac.somethingToPrune(tx) {
+		return nil, nil
+	}
 
+	if logEvery == nil {
+		logEvery = time.NewTicker(30 * time.Second)
+		defer logEvery.Stop()
+	}
+	//ac.a.logger.Debug("aggregator prune", "step", step,
+	//	"txn_range", fmt.Sprintf("[%d,%d)", txFrom, txTo), "limit", limit,
+	//	/*"stepsLimit", limit/ac.a.aggregationStep,*/ "stepsRangeInDB", ac.a.StepsRangeInDBAsStr(tx))
+	//
 	aggStat := &AggregatorPruneStat{Domains: make(map[string]*DomainPruneStat), Indices: make(map[string]*InvertedIndexPruneStat)}
 	for id, d := range ac.d {
 		var err error
