@@ -1296,7 +1296,7 @@ func (a *AggregatorV3) cleanAfterNewFreeze(in MergedFilesV3) {
 // we can set it to 0, because no re-org on this blocks are possible
 func (a *AggregatorV3) KeepStepsInDB(steps uint64) *AggregatorV3 {
 	a.keepInDB = a.FirstTxNumOfStep(steps)
-	for _, d := range []*Domain{a.accounts, a.storage, a.code, a.commitment} {
+	for _, d := range a.d {
 		if d == nil {
 			continue
 		}
