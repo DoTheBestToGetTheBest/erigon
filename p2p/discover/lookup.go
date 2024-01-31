@@ -218,7 +218,7 @@ func (it *lookupIterator) Node() *enode.Node {
 
 // Next moves to the next node.
 func (it *lookupIterator) Next() bool {
-	// Reduce next node in buffer.
+	// Consume next node in buffer.
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}

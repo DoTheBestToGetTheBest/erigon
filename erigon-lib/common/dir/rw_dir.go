@@ -49,6 +49,7 @@ func FileExist(path string) bool {
 		if os.IsNotExist(err) {
 			return false
 		}
+		panic(err)
 		return false
 	}
 	if !fi.Mode().IsRegular() {
