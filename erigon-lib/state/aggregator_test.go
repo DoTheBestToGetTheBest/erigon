@@ -323,7 +323,7 @@ func TestAggregatorV3_RestartOnFiles(t *testing.T) {
 	err = domains.Flush(context.Background(), tx)
 	require.NoError(t, err)
 
-	latestStepInDB := agg.accounts.LastStepInDB(tx)
+	latestStepInDB := agg.d[kv.AccountsDomain].LastStepInDB(tx)
 	require.Equal(t, 5, int(latestStepInDB))
 
 	err = tx.Commit()
@@ -466,7 +466,7 @@ func TestAggregator_ReplaceCommittedKeys(t *testing.T) {
 
 		addr, loc := keys[txNum-1-half][:length.Addr], keys[txNum-1-half][length.Addr:]
 
-		prev, step, _, err := ac.storage.GetLatest(addr, loc, tx)
+		prev, step, _, err := ac.d[kv.StorageDomain].GetLatest(addr, loc, tx)
 		require.NoError(t, err)
 		err = domains.DomainPut(kv.StorageDomain, addr, loc, []byte{addr[0], loc[0]}, prev, step)
 		require.NoError(t, err)
@@ -483,7 +483,7 @@ func TestAggregator_ReplaceCommittedKeys(t *testing.T) {
 	defer aggCtx2.Close()
 
 	for i, key := range keys {
-		storedV, _, found, err := aggCtx2.storage.GetLatest(key[:length.Addr], key[length.Addr:], tx)
+		storedV, _, found, err := aggCtx2.d[kv.StorageDomain].GetLatest(key[:length.Addr], key[length.Addr:], tx)
 		require.Truef(t, found, "key %x not found %d", key, i)
 		require.NoError(t, err)
 		require.EqualValues(t, key[0], storedV[0])

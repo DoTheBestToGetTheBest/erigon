@@ -17,7 +17,6 @@
 package dir
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -50,7 +49,6 @@ func FileExist(path string) bool {
 		if os.IsNotExist(err) {
 			return false
 		}
-		panic(fmt.Errorf("%w, %s", err, path))
 		return false
 	}
 	if !fi.Mode().IsRegular() {
