@@ -747,11 +747,12 @@ func (ac *AggregatorV3Context) somethingToPrune(tx kv.Tx) bool {
 	if dbg.NoPrune() {
 		return false
 	}
-	return ac.commitment.CanPruneUntil(tx) ||
-		ac.account.CanPruneUntil(tx) ||
-		ac.code.CanPruneUntil(tx) ||
-		ac.storage.CanPruneUntil(tx) ||
-		ac.logAddrs.CanPrune(tx) ||
+	for _, d := range ac.d {
+		if !d.CanPruneUntil(tx) {
+			return false
+		}
+	}
+	return ac.logAddrs.CanPrune(tx) ||
 		ac.logTopics.CanPrune(tx) ||
 		ac.tracesFrom.CanPrune(tx) ||
 		ac.tracesTo.CanPrune(tx)
@@ -881,20 +882,17 @@ func (ac *AggregatorV3Context) Prune(ctx context.Context, tx kv.RwTx, limit uint
 		step = (txTo - 1) / ac.a.StepSize()
 	}
 
-	logEvery := time.NewTicker(30 * time.Second)
-	defer logEvery.Stop()
 	ac.a.logger.Info("aggregator prune", "step", step,
 		"range", fmt.Sprintf("[%d,%d)", txFrom, txTo), /*"limit", limit,
 		"stepsLimit", limit/ac.a.aggregationStep,*/"stepsRangeInDB", ac.a.StepsRangeInDBAsStr(tx))
 
-	for _, d := range ac.d {
-		if err := d.Prune(ctx, tx, step, txFrom, txTo, limit, logEvery); err != nil {
-			return err
+	aggStat := &AggregatorPruneStat{Domains: make(map[string]*DomainPruneStat), Indices: make(map[string]*InvertedIndexPruneStat)}
+	for id, d := range ac.d {
+		var err error
+		aggStat.Domains[ac.d[id].d.filenameBase], err = d.Prune(ctx, tx, step, txFrom, txTo, limit, logEvery)
+		if err != nil {
+			return aggStat, err
 		}
-	}
-	comps, err := ac.commitment.Prune(ctx, tx, step, txFrom, txTo, limit, logEvery)
-	if err != nil {
-		return nil, err
 	}
 	lap, err := ac.logAddrs.Prune(ctx, tx, txFrom, txTo, limit, logEvery, false, nil)
 	if err != nil {
@@ -912,11 +910,6 @@ func (ac *AggregatorV3Context) Prune(ctx context.Context, tx kv.RwTx, limit uint
 	if err != nil {
 		return nil, err
 	}
-	aggStat := &AggregatorPruneStat{Domains: make(map[string]*DomainPruneStat), Indices: make(map[string]*InvertedIndexPruneStat)}
-	aggStat.Domains[ac.account.d.filenameBase] = ap
-	aggStat.Domains[ac.storage.d.filenameBase] = sp
-	aggStat.Domains[ac.code.d.filenameBase] = cp
-	aggStat.Domains[ac.commitment.d.filenameBase] = comps
 	aggStat.Indices[ac.logAddrs.ii.filenameBase] = lap
 	aggStat.Indices[ac.logTopics.ii.filenameBase] = ltp
 	aggStat.Indices[ac.tracesFrom.ii.filenameBase] = tfp
