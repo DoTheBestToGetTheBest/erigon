@@ -1389,13 +1389,7 @@ func (hc *HistoryContext) GetNoStateWithRecent(key []byte, txNum uint64, roTx kv
 		return nil, ok, err
 	}
 	if ok {
-		if traceGetAsOf == hc.h.filenameBase {
-			fmt.Printf("GetNoStateWithRecent1(%s, %x, %d)\n", hc.h.filenameBase, key, txNum)
-		}
 		return v, true, nil
-	}
-	if traceGetAsOf == hc.h.filenameBase {
-		fmt.Printf("GetNoStateWithRecent2(%s, %x, %d)\n", hc.h.filenameBase, key, txNum)
 	}
 
 	return hc.getNoStateFromDB(key, txNum, roTx)
