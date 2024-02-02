@@ -42,7 +42,6 @@ import (
 
 	common2 "github.com/ledgerwatch/erigon-lib/common"
 	"github.com/ledgerwatch/erigon-lib/common/background"
-	"github.com/ledgerwatch/erigon-lib/common/cmp"
 	"github.com/ledgerwatch/erigon-lib/common/datadir"
 	"github.com/ledgerwatch/erigon-lib/common/dbg"
 	"github.com/ledgerwatch/erigon-lib/common/dir"
@@ -594,6 +593,7 @@ Loop:
 		case <-a.ctx.Done():
 			return a.ctx.Err()
 		case <-finished:
+			fmt.Println("BuildFiles finished")
 			break Loop
 		case <-logEvery.C:
 			if !(a.buildingFiles.Load() || a.mergeingFiles.Load() || a.buildingOptionalIndices.Load()) {
@@ -687,13 +687,11 @@ type flusher interface {
 }
 
 func (ac *AggregatorV3Context) maxTxNumInDomainFiles(cold bool) uint64 {
-	return cmp.Min(
-		cmp.Min(
-			ac.d[kv.AccountsDomain].maxTxNumInDomainFiles(cold),
-			ac.d[kv.CodeDomain].maxTxNumInDomainFiles(cold)),
-		cmp.Min(
-			ac.d[kv.StorageDomain].maxTxNumInDomainFiles(cold),
-			ac.d[kv.CommitmentDomain].maxTxNumInDomainFiles(cold)),
+	return min(
+		ac.d[kv.AccountsDomain].maxTxNumInDomainFiles(cold),
+		ac.d[kv.CodeDomain].maxTxNumInDomainFiles(cold),
+		ac.d[kv.StorageDomain].maxTxNumInDomainFiles(cold),
+		ac.d[kv.CommitmentDomain].maxTxNumInDomainFiles(cold),
 	)
 }
 
@@ -769,7 +767,9 @@ func (ac *AggregatorV3Context) PruneSmallBatches(ctx context.Context, timeout ti
 			return err
 		}
 		if stat == nil {
-			log.Info("[snapshots] PruneSmallBatches", "took", time.Since(started).String(), "stat", fullStat.String())
+			if fstat := fullStat.String(); fstat != "" {
+				log.Info("[snapshots] PruneSmallBatches", "took", time.Since(started).String(), "stat", fstat)
+			}
 			return nil
 		}
 		fullStat.Accumulate(stat)
@@ -778,7 +778,7 @@ func (ac *AggregatorV3Context) PruneSmallBatches(ctx context.Context, timeout ti
 		case <-logEvery.C:
 			ac.a.logger.Info("[snapshots] pruning",
 				"until timeout", time.Until(started.Add(timeout)).String(),
-				"aggregatedStep", ac.maxTxNumInDomainFiles(false)/ac.a.StepSize(),
+				"aggregatedStep", (ac.maxTxNumInDomainFiles(false)-1)/ac.a.StepSize(),
 				"stepsRangeInDB", ac.a.StepsRangeInDBAsStr(tx),
 				"pruned", fullStat.String(),
 			)
@@ -865,13 +865,13 @@ func (ac *AggregatorV3Context) Prune(ctx context.Context, tx kv.RwTx, limit uint
 	}
 
 	var txFrom, step uint64 // txFrom is always 0 to avoid dangling keys in indices/hist
-	txTo := ac.maxTxNumInDomainFiles(false)
+	txTo := ac.a.minimaxTxNumInFiles.Load()
 	if txTo > 0 {
 		// txTo is first txNum in next step, has to go 1 tx behind to get correct step number
 		step = (txTo - 1) / ac.a.StepSize()
 	}
 
-	if !ac.somethingToPrune(tx) {
+	if txFrom == txTo || !ac.somethingToPrune(tx) {
 		return nil, nil
 	}
 
@@ -879,10 +879,10 @@ func (ac *AggregatorV3Context) Prune(ctx context.Context, tx kv.RwTx, limit uint
 		logEvery = time.NewTicker(30 * time.Second)
 		defer logEvery.Stop()
 	}
-	//ac.a.logger.Debug("aggregator prune", "step", step,
+	//ac.a.logger.Info("aggregator prune", "step", step,
 	//	"txn_range", fmt.Sprintf("[%d,%d)", txFrom, txTo), "limit", limit,
 	//	/*"stepsLimit", limit/ac.a.aggregationStep,*/ "stepsRangeInDB", ac.a.StepsRangeInDBAsStr(tx))
-	//
+
 	aggStat := &AggregatorPruneStat{Domains: make(map[string]*DomainPruneStat), Indices: make(map[string]*InvertedIndexPruneStat)}
 	for id, d := range ac.d {
 		var err error
@@ -957,14 +957,10 @@ func (ac *AggregatorV3Context) LogStats(tx kv.Tx, tx2block func(endTxNumMinimax 
 }
 
 func (a *AggregatorV3) EndTxNumNoCommitment() uint64 {
-	min := a.d[kv.AccountsDomain].endTxNumMinimax()
-	if txNum := a.d[kv.StorageDomain].endTxNumMinimax(); txNum < min {
-		min = txNum
-	}
-	if txNum := a.d[kv.CodeDomain].endTxNumMinimax(); txNum < min {
-		min = txNum
-	}
-	return min
+	return min(
+		a.d[kv.AccountsDomain].endTxNumMinimax(),
+		a.d[kv.StorageDomain].endTxNumMinimax(),
+		a.d[kv.CodeDomain].endTxNumMinimax())
 }
 
 func (a *AggregatorV3) EndTxNumMinimax() uint64 { return a.minimaxTxNumInFiles.Load() }
@@ -980,25 +976,30 @@ func (a *AggregatorV3) FilesAmount() (res []int) {
 	)
 }
 
+func FirstTxNumOfStep(step, size uint64) uint64 {
+	return step * size
+}
+
+func LastTxNumOfStep(step, size uint64) uint64 {
+	return FirstTxNumOfStep(step+1, size) - 1
+}
+
 // FirstTxNumOfStep returns txStepBeginning of given step.
 // Step 0 is a range [0, stepSize).
-// To prune step needed to Prune ragne [txStepBeginning, txNextStepBeginning)
-func (a *AggregatorV3) FirstTxNumOfStep(step uint64) uint64 {
-	return step * a.StepSize()
+// To prune step needed to fully Prune range [txStepBeginning, txNextStepBeginning)
+func (a *AggregatorV3) FirstTxNumOfStep(step uint64) uint64 { // could have some smaller steps to prune// could have some smaller steps to prune
+	return FirstTxNumOfStep(step, a.StepSize())
 }
 
 func (a *AggregatorV3) EndTxNumDomainsFrozen() uint64 {
-	return cmp.Min(
-		cmp.Min(
-			a.d[kv.AccountsDomain].endIndexedTxNumMinimax(true),
-			a.d[kv.StorageDomain].endIndexedTxNumMinimax(true),
-		),
-		cmp.Min(
-			a.d[kv.CodeDomain].endIndexedTxNumMinimax(true),
-			a.d[kv.CommitmentDomain].endIndexedTxNumMinimax(true),
-		),
+	return min(
+		a.d[kv.AccountsDomain].endIndexedTxNumMinimax(true),
+		a.d[kv.StorageDomain].endIndexedTxNumMinimax(true),
+		a.d[kv.CodeDomain].endIndexedTxNumMinimax(true),
+		a.d[kv.CommitmentDomain].endIndexedTxNumMinimax(true),
 	)
 }
+
 func (a *AggregatorV3) recalcMaxTxNum() {
 	min := a.d[kv.AccountsDomain].endTxNumMinimax()
 	if txNum := a.d[kv.StorageDomain].endTxNumMinimax(); txNum < min {
@@ -1252,6 +1253,7 @@ func (ac *AggregatorV3Context) mergeFiles(ctx context.Context, files SelectedSta
 	if err == nil {
 		closeFiles = false
 	}
+	//fmt.Printf("[snapshots] merge done %s\n", r.String())
 	return mf, err
 }
 
@@ -1363,6 +1365,7 @@ func (a *AggregatorV3) BuildFilesInBackground(txNum uint64) chan struct{} {
 		a.BuildOptionalMissedIndicesInBackground(a.ctx, 1)
 
 		if dbg.NoMerge() {
+			close(fin)
 			return
 		}
 		if ok := a.mergeingFiles.CompareAndSwap(false, true); !ok {
