@@ -1294,9 +1294,8 @@ func NewBlockRetire(
 	}
 }
 
-func (br *BlockRetire) SetWorkers(workers int) {
-	br.workers = workers
-}
+func (br *BlockRetire) SetWorkers(workers int) { br.workers = workers }
+func (br *BlockRetire) GetWorkers() int        { return br.workers }
 
 func (br *BlockRetire) IO() (services.FullBlockReader, *blockio.BlockWriter) {
 	return br.blockReader, br.blockWriter
@@ -1607,7 +1606,7 @@ func DumpBlocks(ctx context.Context, version uint8, blockFrom, blockTo, blocksPe
 	}
 	chainConfig := fromdb.ChainConfig(chainDB)
 
-	firstTxNum := blockReader.(*BlockReader).FirstTxNumNotInSnapshots()
+	firstTxNum := blockReader.FirstTxnNumNotInSnapshots()
 	for i := blockFrom; i < blockTo; i = chooseSegmentEnd(i, blockTo, blocksPerFile) {
 		lastTxNum, err := dumpBlocksRange(ctx, version, i, chooseSegmentEnd(i, blockTo, blocksPerFile), tmpDir, snapDir, firstTxNum, chainDB, *chainConfig, workers, lvl, logger)
 		if err != nil {

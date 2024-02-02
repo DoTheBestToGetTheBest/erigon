@@ -157,22 +157,21 @@ func ExecV3(ctx context.Context,
 
 	if initialCycle {
 		agg.SetCompressWorkers(estimate.CompressSnapshot.Workers())
-		defer agg.SetCompressWorkers(1)
 		agg.SetCollateAndBuildWorkers(estimate.StateV3Collate.Workers())
-		defer agg.SetCollateAndBuildWorkers(1)
-
 		if err := agg.BuildOptionalMissedIndices(ctx, estimate.IndexSnapshot.Workers()); err != nil {
 			return err
 		}
 		if err := agg.BuildMissedIndices(ctx, estimate.IndexSnapshot.Workers()); err != nil {
 			return err
 		}
+	} else {
+		agg.SetCompressWorkers(1)
+		agg.SetCollateAndBuildWorkers(1)
 	}
 
 	applyTx := txc.Tx
 	useExternalTx := applyTx != nil
 	if !useExternalTx {
-
 		if !parallel {
 			var err error
 			applyTx, err = chainDb.BeginRw(ctx) //nolint
